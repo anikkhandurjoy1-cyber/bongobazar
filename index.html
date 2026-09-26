@@ -111,6 +111,12 @@ nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.97);backdrop
 .b-btn{padding:7px 18px;border-radius:50px;font-weight:700;font-size:13px;border:none;cursor:pointer;font-family:'Hind Siliguri',sans-serif;}
 .b-btn-cyan{background:var(--gold);color:#1b1300;}
 /* Default brand banner (until admin adds one) */
+.focus-mode .banner-wrap,.focus-mode .countdown-strip{display:none!important;}
+.focus-mode .cats-section{padding-top:8px;}
+.pd-rel{margin-top:20px;padding-top:14px;border-top:1px solid var(--border);}
+.pd-rel-title{font-family:var(--head);font-weight:700;font-size:16px;margin-bottom:10px;color:var(--text);}
+.pd-rel-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+.pd-rel-grid .pc{animation:none;}
 .bbd{background:linear-gradient(115deg,#0B4F31 0%,#0E5E3A 45%,#17784B 100%);justify-content:space-between;}
 .bbd-glow{position:absolute;border-radius:50%;pointer-events:none;}
 .bbd-glow.g1{width:55%;aspect-ratio:1;left:-18%;top:-60%;background:radial-gradient(circle,rgba(232,163,23,.28),transparent 65%);}
@@ -365,6 +371,10 @@ footer .brand-tag{color:var(--gold);}
 </style>
 </head>
 <body>
+<script>
+// Category or product link → skip the banner and go straight to products.
+(function(){try{var q=new URLSearchParams(location.search);if(q.get('category')||q.get('product'))document.documentElement.classList.add('focus-mode');}catch(e){}})();
+</script>
 
 <!-- TOPBAR -->
 <div class="topbar" id="topbar-text">🚚 FREE DELIVERY সারা বাংলাদেশ — অর্ডার করতে কল করুন: <a href="tel:01351450853">01351450853</a></div>
@@ -1087,9 +1097,19 @@ function injectTrackingPixels(){
 // TOP CATEGORIES — round photo cards. Uses the category's own image (admin → Categories),
 // otherwise the first product in that category, otherwise an emoji.
 // ══════════════════════════════════
+// A product belongs to its main category AND any "related categories" chosen in admin.
+function prodCats(p){
+  const out=[];
+  if(p && p.category) out.push(p.category);
+  if(p && Array.isArray(p.relatedCategories)) p.relatedCategories.forEach(c=>{ if(c && !out.includes(c)) out.push(c); });
+  return out;
+}
+function prodInCat(p,cat){ return prodCats(p).includes(cat); }
+function setFocusMode(on){ document.documentElement.classList.toggle('focus-mode', !!on); }
+
 function catImage(c){
   if(c.image) return cld(c.image,280);
-  const p = products.find(x=>x.category===c.name && x.status!=='Inactive' && productThumb(x,280));
+  const p = products.find(x=>prodInCat(x,c.name) && x.status!=='Inactive' && productThumb(x,280));
   return p ? productThumb(p,280) : '';
 }
 
@@ -1122,6 +1142,7 @@ function renderCategories(){
 
 function filterCat(cat,el){
   curCat=cat;
+  setFocusMode(cat!=='all');
   document.querySelectorAll('.cat-chip').forEach(c=>c.classList.remove('active'));
   if(el) el.classList.add('active');
   updateProductsTitle();
@@ -1150,6 +1171,8 @@ function tryApplyDeepLinkCategory(){
   if(chip){
     _catDeepLinkHandled=true;
     filterCat(cat,chip);
+    const sec=document.getElementById('cats-section');
+    if(sec) setTimeout(()=>sec.scrollIntoView({block:'start'}),50);
   }
 }
 
@@ -1171,7 +1194,7 @@ function renderProducts(){
   loadingEl.style.display='none';retryEl.style.display='none';
   const search=(document.getElementById('search-input').value||'').toLowerCase();
   let f=products.filter(p=>p.status!=='Inactive');
-  if(curCat!=='all') f=f.filter(p=>p.category===curCat);
+  if(curCat!=='all') f=f.filter(p=>prodInCat(p,curCat));
   if(search) f=f.filter(p=>(p.name||'').toLowerCase().includes(search));
   document.getElementById('p-count-lbl').textContent=f.length+' টি পণ্য';
   if(!f.length){grid.innerHTML='';empty.style.display='block';return;}
@@ -1391,8 +1414,10 @@ function openDetail(docId){
     ${(p.desc||settings.product_disclaimer)?`<div class="pd-desc-title">পণ্যের বিবরণ</div>`:''}
     ${p.desc?`<div class="pd-desc">${p.desc}</div>`:''}
     ${settings.product_disclaimer?`<div class="pd-disclaimer">${settings.product_disclaimer}</div>`:''}
+    ${relatedProductsHTML(p)}
   `;
   om('pd-overlay');
+  const pdm=document.querySelector('#pd-overlay .pd-modal'); if(pdm) pdm.scrollTop=0;
   try{
     const url=new URL(window.location.href);
     if(url.searchParams.get('product')!==docId){
@@ -1402,8 +1427,29 @@ function openDetail(docId){
   }catch(e){}
 }
 
+// Related = products sharing the main or any related category. Topped up with other
+// products (best discount first) so the section is never nearly empty.
+function relatedProducts(p){
+  const mine=prodCats(p);
+  const live=products.filter(x=>x.status!=='Inactive' && x._docId!==p._docId);
+  const score=x=>prodCats(x).filter(c=>mine.includes(c)).length;
+  const rel=live.filter(x=>score(x)>0).sort((a,b)=>score(b)-score(a));
+  if(rel.length<6){
+    const disc=x=>x.sale&&x.regular&&x.sale<x.regular?1-x.sale/x.regular:0;
+    live.filter(x=>!rel.includes(x)).sort((a,b)=>disc(b)-disc(a)).slice(0,6-rel.length).forEach(x=>rel.push(x));
+  }
+  return rel;
+}
+function relatedProductsHTML(p){
+  const list=relatedProducts(p);
+  if(!list.length) return '';
+  return `<div class="pd-rel"><div class="pd-rel-title">আরও দেখুন — সম্পর্কিত পণ্য</div>
+    <div class="pd-rel-grid">${list.map((x,i)=>productCardHTML(x,i+6)).join('')}</div></div>`;
+}
+
 function closeDetail(){
   cm('pd-overlay');
+  if(curCat==='all') setFocusMode(false);   // came from a product link → show the normal home page again
   try{
     const url=new URL(window.location.href);
     if(url.searchParams.has('product')){
@@ -1476,8 +1522,10 @@ window.addEventListener('popstate',function(){
   }
   cm('pd-overlay');
   const cat=params.get('category');
+  if(!cat && curCat==='all') setFocusMode(false);
   const chip=cat ? findCatChip(cat) : null;
   if(cat && chip){
+    setFocusMode(true);
     curCat=cat;
     document.querySelectorAll('.cat-chip').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
@@ -1486,6 +1534,7 @@ window.addEventListener('popstate',function(){
     return;
   }
   if(!cat){
+    setFocusMode(false);
     const allChip=findCatChip('all');
     if(allChip && curCat!=='all'){
       curCat='all';
