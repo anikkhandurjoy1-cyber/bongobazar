@@ -235,6 +235,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.97);backdrop
 .pd-old{font-size:14px;color:var(--muted);text-decoration:line-through;}
 .pd-disc{background:var(--gold);color:#1b1300;font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px;}
 .pd-delivery{display:flex;align-items:center;gap:7px;background:rgba(14,94,58,.07);border:1px solid rgba(14,94,58,.2);border-radius:8px;padding:7px 11px;margin-bottom:9px;font-size:13px;color:var(--primary);}
+.pd-desc-title{font-family:var(--head);font-weight:700;font-size:15px;color:var(--primary);margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--border);}
 .pd-desc{font-size:13.5px;color:var(--muted);line-height:1.75;margin-bottom:11px;white-space:pre-line;}
 .pd-disclaimer{font-size:12px;color:#92400E;line-height:1.7;margin-bottom:11px;white-space:pre-line;background:rgba(232,163,23,.1);border:1px solid rgba(232,163,23,.35);border-radius:8px;padding:10px 12px;}
 .qty-wrap{display:flex;align-items:center;gap:9px;margin-bottom:13px;}
@@ -1336,8 +1337,6 @@ function openDetail(docId){
     <div class="pd-price-wrap"><span class="pd-price">৳${price.toLocaleString()}</span>${p.sale&&p.regular&&p.sale<p.regular?`<span class="pd-old">৳${p.regular.toLocaleString()}</span>`:''} ${disc>0?`<span class="pd-disc">-${disc}%</span>`:''}</div>
     ${p.code?`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Code: ${p.code}</div>`:''}
     <div class="pd-delivery">✅ Free Delivery — সারা বাংলাদেশ</div>
-    ${p.desc?`<div class="pd-desc">${p.desc}</div>`:''}
-    ${settings.product_disclaimer?`<div class="pd-disclaimer">${settings.product_disclaimer}</div>`:''}
     <div class="qty-wrap">
       <span class="qty-lbl">পরিমাণ:</span>
       <button class="qty-btn" onclick="chQty(-1)">−</button>
@@ -1349,6 +1348,9 @@ function openDetail(docId){
     <a class="pd-wa-btn" href="${waLink(waMsg)}" target="_blank" rel="noopener">${WA_ICON} WhatsApp-এ অর্ডার করুন</a>
     <button class="pd-cart-btn" onclick="addCart('${p._docId}');closeDetail()">+ Cart-এ যোগ করুন</button>
     <a class="pd-call-btn" href="tel:${SHOP_PHONE}">📞 কল করুন — ${SHOP_PHONE}</a>
+    ${(p.desc||settings.product_disclaimer)?`<div class="pd-desc-title">পণ্যের বিবরণ</div>`:''}
+    ${p.desc?`<div class="pd-desc">${p.desc}</div>`:''}
+    ${settings.product_disclaimer?`<div class="pd-disclaimer">${settings.product_disclaimer}</div>`:''}
   `;
   om('pd-overlay');
   try{
