@@ -125,6 +125,13 @@ tr:hover td{background:rgba(0,0,0,0.02);}
 .fg-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .fg-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 
+/* RELATED CATEGORIES */
+.relcat-box{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;min-height:40px;}
+.relcat-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:12px;cursor:pointer;user-select:none;}
+.relcat-chip input{margin:0;accent-color:var(--primary);}
+.relcat-chip.on{border-color:var(--primary);background:rgba(14,94,58,.08);color:var(--primary);font-weight:600;}
+.relcat-empty{font-size:12px;color:var(--muted);padding:3px 4px;}
+
 /* CATEGORY IMAGE */
 .cat-prev{width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--surface);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
 .cat-prev img{width:100%;height:100%;object-fit:cover;}
@@ -718,9 +725,13 @@ tr:hover td{background:rgba(0,0,0,0.02);}
       <div class="fg"><label>Product Code</label><input type="text" id="pm-code" placeholder="Code"></div>
       <div class="fg"><label>Category * <span style="color:var(--muted);font-size:11px;">(website-এ এই category-র নিচে দেখাবে)</span></label>
         <div style="display:flex;gap:6px;">
-          <select id="pm-cat" style="flex:1;min-width:0;"><option value="">Select Category</option></select>
+          <select id="pm-cat" style="flex:1;min-width:0;" onchange="renderRelCats()"><option value="">Select Category</option></select>
           <button type="button" class="btn btn-o btn-sm" onclick="quickAddCategory()" title="নতুন ক্যাটাগরি যোগ করুন">➕ নতুন</button>
         </div>
+      </div>
+      <div class="fg" style="grid-column:1/-1">
+        <label>Related Categories <span style="color:var(--muted);font-size:11px;">(ঐচ্ছিক — টিক দিলে এই পণ্য ওই category-গুলোতেও দেখাবে)</span></label>
+        <div id="pm-relcats" class="relcat-box"></div>
       </div>
       <div class="fg"><label>Regular Price (৳) *</label><input type="number" id="pm-reg" placeholder="0"></div>
       <div class="fg"><label>Sale Price (৳)</label><input type="number" id="pm-sale" placeholder="0"></div>
@@ -2039,6 +2050,27 @@ function ensureUniqueSlug(baseSlug, excludeDocId){
   return slug;
 }
 
+// Related categories = every category except the main one; ticked ones are saved on the product.
+let pmRelCats = [];
+function renderRelCats(){
+  const box=document.getElementById('pm-relcats'); if(!box) return;
+  const main=document.getElementById('pm-cat').value;
+  pmRelCats = pmRelCats.filter(n=>n!==main && categories.some(c=>c.name===n));
+  const others=categories.filter(c=>c.name!==main);
+  if(!others.length){ box.innerHTML='<span class="relcat-empty">আর কোনো category নেই — Categories পেজ থেকে যোগ করুন</span>'; return; }
+  box.innerHTML=others.map(c=>{
+    const on=pmRelCats.includes(c.name);
+    return `<label class="relcat-chip${on?' on':''}"><input type="checkbox" ${on?'checked':''} data-cat="${String(c.name).replace(/"/g,'&quot;')}" onchange="toggleRelCat(this)">${c.name}</label>`;
+  }).join('');
+}
+function toggleRelCat(el){
+  const n=el.dataset.cat;
+  if(el.checked){ if(!pmRelCats.includes(n)) pmRelCats.push(n); }
+  else pmRelCats=pmRelCats.filter(x=>x!==n);
+  el.parentElement.classList.toggle('on',el.checked);
+}
+function prodInCat(p,cat){ return p.category===cat || (Array.isArray(p.relatedCategories) && p.relatedCategories.includes(cat)); }
+
 function resetPF(){
   ['pm-name','pm-code','pm-slug','pm-desc','pm-video-yt'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('pm-reg').value=''; document.getElementById('pm-sale').value='';
@@ -2050,6 +2082,8 @@ function resetPF(){
   renderVideoSlot();
   populateSelects();
   document.getElementById('pm-cat').value='';
+  pmRelCats = [];
+  renderRelCats();
   document.getElementById('pm-title').textContent='Add Product';
 }
 
@@ -2180,6 +2214,7 @@ function saveProduct(){
     name, slug,
     code:document.getElementById('pm-code').value,
     category,
+    relatedCategories: pmRelCats.filter(n=>n && n!==category),
     regular:reg, sale:parseFloat(document.getElementById('pm-sale').value)||0,
     status:document.getElementById('pm-st').value,
     delivery:document.getElementById('pm-del').value,
@@ -2208,7 +2243,7 @@ function renderProducts(){
   const s=(document.getElementById('p-search').value||'').toLowerCase();
   const cf=document.getElementById('p-cfilter').value;
   const sf=document.getElementById('p-sfilter').value;
-  let f=products.filter(p=>(!s||p.name.toLowerCase().includes(s))&&(!cf||p.category===cf)&&(!sf||p.status===sf));
+  let f=products.filter(p=>(!s||p.name.toLowerCase().includes(s))&&(!cf||prodInCat(p,cf))&&(!sf||p.status===sf));
   document.getElementById('p-count').textContent=f.length;
   const tb=document.getElementById('p-tb'), em=document.getElementById('p-empty');
   if(!f.length){ tb.innerHTML=''; em.style.display='block'; return; }
@@ -2217,7 +2252,7 @@ function renderProducts(){
     <td style="color:var(--muted)">${i+1}</td>
     <td><div class="thumb">${p.imageUrl?`<img src="${cld(p.imageUrl,100)}" loading="lazy" onerror="this.style.display='none'">`:'📦'}</div></td>
     <td><span style="font-weight:600">${p.name}</span><br><span style="font-size:11px;color:var(--muted)">${p.code||''}</span></td>
-    <td>${p.category?`<span class="badge Invoiced">${p.category}</span>`:'<span style="font-size:11px;color:var(--red)">নেই</span>'}</td>
+    <td>${p.category?`<span class="badge Invoiced">${p.category}</span>`:'<span style="font-size:11px;color:var(--red)">নেই</span>'}${(p.relatedCategories||[]).length?`<div style="font-size:10.5px;color:var(--muted);margin-top:3px;">+ ${p.relatedCategories.join(', ')}</div>`:''}</td>
     <td style="text-decoration:line-through;color:var(--muted)">৳${p.regular}</td>
     <td style="color:var(--green);font-weight:700">৳${p.sale||p.regular}</td>
     <td><span class="badge ${p.status==='Active'?'Active':'Inactive'}">${p.status}</span></td>
@@ -2229,8 +2264,16 @@ function renderProducts(){
   </tr>`).join('');
 }
 
+function copyCatLink(id){
+  const c=categories.find(x=>x.id===id); if(!c) return;
+  const link = SITE_URL + '/?category=' + encodeURIComponent(c.name);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(()=>toast('Category link কপি হয়েছে ✅')).catch(()=>prompt('লিংকটি কপি করুন:', link));
+  } else prompt('লিংকটি কপি করুন:', link);
+}
+
 function copyAdLink(docId){
-  const link = SITE_URL + '/index.html?product=' + docId;
+  const link = SITE_URL + '/?product=' + docId;
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(link).then(()=>{
       toast('Ad link কপি হয়েছে ✅');
@@ -2251,6 +2294,8 @@ function editProduct(docId){
   slugManuallyEdited = true;
   document.getElementById('pm-code').value=editP.code||'';
   document.getElementById('pm-cat').value=editP.category||'';
+  pmRelCats = Array.isArray(editP.relatedCategories) ? [...editP.relatedCategories] : [];
+  renderRelCats();
   document.getElementById('pm-reg').value=editP.regular||'';
   document.getElementById('pm-sale').value=editP.sale||'';
   document.getElementById('pm-st').value=editP.status||'Active';
@@ -2334,6 +2379,7 @@ function quickAddCategory(){
   }
   populateSelects();
   document.getElementById('pm-cat').value=existing.name;
+  renderRelCats();
 }
 
 function renderCats(){
@@ -2345,9 +2391,10 @@ function renderCats(){
     <td style="color:var(--muted)">${i+1}</td>
     <td><div class="cat-thumb">${c.image?`<img src="${cld(c.image,100)}" loading="lazy">`:'🏷️'}</div></td>
     <td style="font-weight:600">${c.name}</td>
-    <td style="font-size:12px;color:var(--muted)">${products.filter(p=>p.category===c.name).length} টি</td>
+    <td style="font-size:12px;color:var(--muted)">${products.filter(p=>prodInCat(p,c.name)).length} টি</td>
     <td><span class="badge ${c.status==='Active'?'Active':'Inactive'}">${c.status}</span></td>
     <td><div class="ci">
+      <button class="btn btn-o btn-sm" onclick="copyCatLink(${c.id})" title="এই category-র link কপি করুন (Ads-এর জন্য)">🔗</button>
       <button class="btn btn-o btn-sm" onclick="editCat(${c.id})">✏️</button>
       <button class="btn btn-d btn-sm" onclick="delCat(${c.id})">🗑️</button>
     </div></td>
