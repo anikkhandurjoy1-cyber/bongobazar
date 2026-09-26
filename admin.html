@@ -548,11 +548,12 @@ tr:hover td{background:rgba(0,0,0,0.02);}
       <div class="sc2" id="st-delivery" style="display:none;">
         <div class="ss-title">Delivery Charge</div>
         <div class="fg-2">
-          <div class="fg"><label>Inside Dhaka (৳)</label><input type="number" id="s-id" placeholder="0"></div>
+          <div class="fg"><label>Inside Dhaka (৳)</label><input type="number" id="s-id" placeholder="60"></div>
           <div class="fg"><label>Inside Dhaka Text</label><input type="text" id="s-idt" placeholder="Free Delivery"></div>
-          <div class="fg"><label>Outside Dhaka (৳)</label><input type="number" id="s-od" placeholder="0"></div>
+          <div class="fg"><label>Outside Dhaka (৳)</label><input type="number" id="s-od" placeholder="120"></div>
           <div class="fg"><label>Outside Dhaka Text</label><input type="text" id="s-odt" placeholder="Free Delivery"></div>
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">💡 যে পণ্যে "Free Delivery: No" দেওয়া, শুধু সেগুলোতে এই চার্জ লাগবে — কাস্টমার অর্ডারের সময় ঢাকার ভিতরে/বাইরে বেছে নেবে। খালি রাখলে ভিতরে ৳60, বাইরে ৳120 ধরা হবে।</div>
         <button class="btn btn-p" onclick="saveS('delivery')">✅ Save</button>
       </div>
       <div class="sc2" id="st-invoice" style="display:none;">
@@ -1561,6 +1562,7 @@ function viewOrder(docId){
           <span>${o.product||'-'} x${o.qty||1}</span><span style="color:var(--green)">৳${((o.price||0)*(o.qty||1)).toLocaleString()}</span>
         </div>
       </div>
+      ${o.delivery?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Delivery (${o.deliveryType==='inside'?'ঢাকার ভিতরে':'ঢাকার বাইরে'})</span><span>৳${o.delivery}</span></div>`:''}
       ${o.discount?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Discount</span><span style="color:var(--red)">-৳${o.discount}</span></div>`:''}
       <div style="height:1px;background:var(--border);margin:8px 0"></div>
       <div style="display:flex;justify-content:space-between;font-weight:700;font-size:15px"><span>Total</span><span style="color:var(--green)">৳${(o.total||0).toLocaleString()}</span></div>
@@ -1870,6 +1872,7 @@ function printOrders(list){
     <div class="row"><span>Product:</span><span>${o.product} x${o.qty}</span></div>
     <div class="row"><span>Courier:</span><span>${o.courier||'-'}</span></div>
     <div class="row"><span>Payment:</span><span>${o.payment}</span></div>
+    ${o.delivery?`<div class="row"><span>Delivery:</span><span>৳${o.delivery}</span></div>`:''}
     ${o.discount?`<div class="row"><span>Discount:</span><span>-৳${o.discount}</span></div>`:''}
     <div class="row total"><span>Total:</span><span>৳${(o.total||0).toLocaleString()}</span></div>
     <div class="ft">ধন্যবাদ ${shopName}-এ অর্ডার করার জন্য!</div>
