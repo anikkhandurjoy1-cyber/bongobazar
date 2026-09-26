@@ -110,6 +110,19 @@ nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.97);backdrop
 .b-sub{font-size:12.5px;color:rgba(255,255,255,0.9);margin-bottom:10px;}
 .b-btn{padding:7px 18px;border-radius:50px;font-weight:700;font-size:13px;border:none;cursor:pointer;font-family:'Hind Siliguri',sans-serif;}
 .b-btn-cyan{background:var(--gold);color:#1b1300;}
+/* Default brand banner (until admin adds one) */
+.bbd{background:linear-gradient(115deg,#0B4F31 0%,#0E5E3A 45%,#17784B 100%);justify-content:space-between;}
+.bbd-glow{position:absolute;border-radius:50%;pointer-events:none;}
+.bbd-glow.g1{width:55%;aspect-ratio:1;left:-18%;top:-60%;background:radial-gradient(circle,rgba(232,163,23,.28),transparent 65%);}
+.bbd-glow.g2{width:40%;aspect-ratio:1;right:20%;bottom:-70%;background:radial-gradient(circle,rgba(255,255,255,.12),transparent 65%);}
+.bbd-text{position:relative;z-index:2;padding:0 0 0 5%;max-width:62%;}
+.bbd-pill{display:inline-block;background:#E8A317;color:#1b1300;font-weight:700;font-size:clamp(9px,2.4vw,13px);padding:2px 10px;border-radius:50px;margin-bottom:clamp(3px,1vw,8px);}
+.bbd-title{font-family:var(--head);font-weight:800;color:#fff;font-size:clamp(22px,6.4vw,50px);line-height:1;letter-spacing:-.5px;}
+.bbd-title span{color:#E8A317;}
+.bbd-sub{color:rgba(255,255,255,.88);font-size:clamp(10px,2.7vw,16px);margin:clamp(3px,1vw,8px) 0 clamp(6px,1.6vw,14px);}
+.bbd-btn{background:#fff;color:#0E5E3A;border:none;font-weight:700;font-family:'Hind Siliguri',sans-serif;font-size:clamp(10.5px,2.6vw,15px);padding:clamp(4px,1.2vw,9px) clamp(12px,3vw,24px);border-radius:50px;cursor:pointer;}
+.bbd-btn:hover{background:#E8A317;color:#1b1300;}
+.bbd-art{position:relative;z-index:1;height:100%;width:auto;max-width:40%;flex-shrink:0;margin-right:2%;}
 .b-btn-purple{background:var(--primary);color:#fff;}
 .b-btn-green{background:transparent;border:2px solid var(--green);color:var(--green);}
 .b-btn-fire{background:var(--accent);color:#fff;}
@@ -763,15 +776,41 @@ function renderCustomerBanners(){
   const dotsWrap = document.getElementById('banner-dots');
 
   if(!activeBanners.length){
-    slidesWrap.innerHTML = `<div class="banner-slide active" data-i="0" style="background:linear-gradient(120deg,#0E5E3A,#1C8A56);">
-      <div class="banner-slide-overlay"></div>
-      <div class="b-content">
-        <div class="b-title">BonghoBazar</div>
-        <div class="b-sub">ঘরের দরকারি সব পণ্য — ক্যাশ অন ডেলিভারিতে সারা দেশে</div>
-        <button class="b-btn b-btn-cyan" onclick="showTab('shop')">পণ্য দেখুন</button>
+    // Default BonghoBazar banner — shown only until an Active banner is added from Admin → Banner/Slider.
+    slidesWrap.innerHTML = `<div class="banner-slide active bbd" data-i="0">
+      <span class="bbd-glow g1"></span><span class="bbd-glow g2"></span>
+      <div class="bbd-text">
+        <span class="bbd-pill">স্পেশাল অফার</span>
+        <div class="bbd-title">Bongho<span>Bazar</span></div>
+        <div class="bbd-sub">সেরা দামে সেরা পণ্য · ক্যাশ অন ডেলিভারি</div>
+        <button class="bbd-btn" onclick="document.getElementById('products-grid').scrollIntoView({behavior:'smooth',block:'start'})">এখনই কিনুন →</button>
       </div>
+      <svg class="bbd-art" viewBox="0 0 260 200" aria-hidden="true">
+        <circle cx="150" cy="104" r="86" fill="#1C8A56" opacity=".55"/>
+        <circle cx="150" cy="104" r="62" fill="#27A066" opacity=".45"/>
+        <g transform="translate(40 118) rotate(-10)">
+          <rect width="58" height="46" rx="6" fill="#D7322A"/><rect x="24" width="10" height="46" fill="#E8A317"/>
+          <rect x="-4" y="-10" width="66" height="14" rx="4" fill="#B8261F"/><rect x="24" y="-10" width="10" height="14" fill="#E8A317"/>
+          <path d="M29 -10c-10-14-24-8-16 0M29 -10c10-14 24-8 16 0" fill="none" stroke="#E8A317" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <g transform="translate(112 38)">
+          <path d="M22 26V18a24 24 0 0 1 48 0v8" fill="none" stroke="#E8A317" stroke-width="7" stroke-linecap="round"/>
+          <path d="M4 26h84l-7 104a8 8 0 0 1-8 7H19a8 8 0 0 1-8-7z" fill="#FFFFFF"/>
+          <path d="M4 26h84l-1 12H5z" fill="#E6EFE9"/>
+          <text x="46" y="104" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="56" fill="#0E5E3A">B</text>
+        </g>
+        <g transform="translate(200 128) rotate(12)">
+          <rect width="40" height="34" rx="5" fill="#E8A317"/><rect x="16" width="8" height="34" fill="#FFFFFF"/>
+          <rect x="-3" y="-8" width="46" height="11" rx="3" fill="#C98A0C"/><rect x="16" y="-8" width="8" height="11" fill="#FFFFFF"/>
+        </g>
+        <path d="M222 40l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#FFD66B"/>
+        <path d="M60 50l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#FFD66B" opacity=".9"/>
+        <circle cx="236" cy="96" r="4" fill="#FFD66B"/><circle cx="86" cy="30" r="3" fill="#fff" opacity=".7"/>
+      </svg>
     </div>`;
     dotsWrap.innerHTML = '';
+    document.querySelector('.banner-prev').style.display='none';
+    document.querySelector('.banner-next').style.display='none';
     TOTAL_BANNERS = 1;
     bannerIdx = 0;
     if(bannerTimer) clearInterval(bannerTimer);
