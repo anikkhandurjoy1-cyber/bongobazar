@@ -248,6 +248,15 @@ nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.97);backdrop
 .pd-old{font-size:14px;color:var(--muted);text-decoration:line-through;}
 .pd-disc{background:var(--gold);color:#1b1300;font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px;}
 .pd-delivery{display:flex;align-items:center;gap:7px;background:rgba(14,94,58,.07);border:1px solid rgba(14,94,58,.2);border-radius:8px;padding:7px 11px;margin-bottom:9px;font-size:13px;color:var(--primary);}
+.pd-delivery-paid{background:#FFF7E6!important;color:#8A5A00!important;border-color:#F3D9A4!important;}
+.del-title{font-weight:700;font-size:13px;margin-bottom:7px;}
+.del-opt{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:7px;cursor:pointer;background:var(--card);}
+.del-opt.on{border-color:var(--primary);background:rgba(14,94,58,.06);}
+.del-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;position:relative;}
+.del-opt.on .del-radio{border-color:var(--primary);}
+.del-opt.on .del-radio::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--primary);}
+.del-lbl{flex:1;font-size:13.5px;font-weight:600;}
+.del-amt{font-family:var(--head);font-weight:800;color:var(--accent);font-size:15px;}
 .pd-desc-title{font-family:var(--head);font-weight:700;font-size:15px;color:var(--primary);margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--border);}
 .pd-desc{font-size:13.5px;color:var(--muted);line-height:1.75;margin-bottom:11px;white-space:pre-line;}
 .pd-disclaimer{font-size:12px;color:#92400E;line-height:1.7;margin-bottom:11px;white-space:pre-line;background:rgba(232,163,23,.1);border:1px solid rgba(232,163,23,.35);border-radius:8px;padding:10px 12px;}
@@ -579,7 +588,7 @@ footer .brand-tag{color:var(--gold);}
         <div class="otb-emoji">🛒</div>
         <div class="otb-line1">অর্ডার করুন — <span>স্টক সীমিত</span></div>
         <div class="otb-line2">নাম, ঠিকানা ও মোবাইল নম্বর দিয়ে কনফার্ম করুন</div>
-        <div class="otb-urgency">⏰ আজকের অর্ডারে ফ্রি ডেলিভারি</div>
+        <div class="otb-urgency" id="otb-urgency">⏰ আজকের অর্ডারে ফ্রি ডেলিভারি</div>
       </div>
       <div class="order-product-preview" id="order-prod-preview" style="display:none;">
         <div class="opp-img" id="opp-img">📦</div>
@@ -601,15 +610,7 @@ footer .brand-tag{color:var(--gold);}
       <div class="fg"><label>মোবাইল নম্বর *</label><input type="tel" id="o-phone" placeholder="01XXXXXXXXX"></div>
       <div class="fg"><label>সম্পূর্ণ ঠিকানা *</label><textarea id="o-address" placeholder="বাড়ি, রাস্তা, এলাকা, জেলা..."></textarea></div>
       <div class="fg"><label>বিশেষ মন্তব্য</label><input type="text" id="o-note" placeholder="কালার, সাইজ বা ডেলিভারি সম্পর্কে..."></div>
-      <div style="margin-bottom:12px;">
-        <div class="cod-free-badge">
-          <span style="font-size:18px;">🚚</span>
-          <div>
-            <div style="font-weight:700;font-size:13px;">সম্পূর্ণ Free Delivery</div>
-            <div style="font-size:11px;color:var(--primary);">সারা বাংলাদেশে কোনো ডেলিভারি চার্জ নেই</div>
-          </div>
-        </div>
-      </div>
+      <div style="margin-bottom:12px;" id="del-box"></div>
       <div class="order-summary-table" id="order-summ" style="display:none;">
         <div class="ost-row"><span>Product</span><span id="ost-p">—</span></div>
         <div class="ost-row"><span>Price</span><span id="ost-pr">৳0</span></div>
@@ -1375,7 +1376,7 @@ function openDetail(docId){
     <div class="pd-name">${p.name}</div>
     <div class="pd-price-wrap"><span class="pd-price">৳${price.toLocaleString()}</span>${p.sale&&p.regular&&p.sale<p.regular?`<span class="pd-old">৳${p.regular.toLocaleString()}</span>`:''} ${disc>0?`<span class="pd-disc">-${disc}%</span>`:''}</div>
     ${p.code?`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Code: ${p.code}</div>`:''}
-    <div class="pd-delivery">✅ Free Delivery — সারা বাংলাদেশ</div>
+    ${isFreeDel(p)?`<div class="pd-delivery">✅ Free Delivery — সারা বাংলাদেশ</div>`:`<div class="pd-delivery pd-delivery-paid">🚚 ডেলিভারি চার্জ: ঢাকার ভিতরে ৳${delAmount('inside')} · ঢাকার বাইরে ৳${delAmount('outside')}</div>`}
     <div class="qty-wrap">
       <span class="qty-lbl">পরিমাণ:</span>
       <button class="qty-btn" onclick="chQty(-1)">−</button>
@@ -1535,7 +1536,33 @@ function chQty(d){curQty=Math.max(1,curQty+d);document.getElementById('pd-qty').
 // ══════════════════════════════════
 // DELIVERY — always free
 // ══════════════════════════════════
-function getDelCharge(){ return 0; }
+// ── Delivery charge ──
+// Product "Free Delivery: Yes" (default) → 0. "No" → charge from Admin → Settings → Delivery Charge.
+const DEF_DEL_INSIDE=60, DEF_DEL_OUTSIDE=120;
+function isFreeDel(p){ return !p || p.delivery!=='No'; }
+function delAmount(type){
+  const raw = type==='inside' ? settings.dhaka_inside : settings.dhaka_outside;
+  const n = parseFloat(raw);
+  if(raw!==undefined && raw!=='' && !isNaN(n)) return n;
+  return type==='inside' ? DEF_DEL_INSIDE : DEF_DEL_OUTSIDE;
+}
+function getDelCharge(){ return isFreeDel(curProd) ? 0 : delAmount(delType); }
+function setDelType(t){ delType=t; renderDelBox(); updSumm(); }
+function renderDelBox(){
+  const box=document.getElementById('del-box'); if(!box) return;
+  const urg=document.getElementById('otb-urgency');
+  if(isFreeDel(curProd)){
+    if(urg) urg.style.display='';
+    box.innerHTML=`<div class="cod-free-badge"><span style="font-size:18px;">🚚</span><div>
+      <div style="font-weight:700;font-size:13px;">সম্পূর্ণ Free Delivery</div>
+      <div style="font-size:11px;color:var(--primary);">সারা বাংলাদেশে কোনো ডেলিভারি চার্জ নেই</div></div></div>`;
+    return;
+  }
+  if(urg) urg.style.display='none';
+  const opt=(t,label)=>`<label class="del-opt${delType===t?' on':''}" onclick="setDelType('${t}')">
+      <span class="del-radio"></span><span class="del-lbl">${label}</span><span class="del-amt">৳${delAmount(t).toLocaleString()}</span></label>`;
+  box.innerHTML=`<div class="del-title">🚚 ডেলিভারি এলাকা বাছুন *</div>${opt('inside','ঢাকার ভিতরে')}${opt('outside','ঢাকার বাইরে')}`;
+}
 
 function updSumm(){
   const p=curProd;if(!p)return;
@@ -1544,7 +1571,7 @@ function updSumm(){
   document.getElementById('ost-pr').textContent='৳'+(p.sale||p.regular||0).toLocaleString();
   document.getElementById('ost-q').textContent=curQty;
   document.getElementById('ost-sub').textContent='৳'+sub.toLocaleString();
-  document.getElementById('ost-del').textContent='Free ✅';
+  document.getElementById('ost-del').textContent=del?('৳'+del.toLocaleString()):'Free ✅';
   document.getElementById('ost-tot').textContent='৳'+tot.toLocaleString();
   document.getElementById('oqw-total').textContent='৳'+sub.toLocaleString();
 }
@@ -1575,6 +1602,7 @@ function openOrderModal(docId){
     document.getElementById('order-qty-wrap').style.display='flex';
     document.getElementById('oqw-num').textContent=curQty;
     document.getElementById('order-summ').style.display='block';
+    renderDelBox();
     updSumm();
   } else {
     document.getElementById('order-prod-preview').style.display='none';
@@ -1611,7 +1639,8 @@ function saveDraftOrder(){
     productImage: mainImg,
     qty: curQty||1,
     price: p?(p.sale||p.regular||0):0,
-    total: p?(p.sale||p.regular||0)*(curQty||1):0,
+    total: p?(p.sale||p.regular||0)*(curQty||1)+getDelCharge():0,
+    delivery: getDelCharge(),
     note: document.getElementById('o-note').value,
     status:'Incomplete',
     date: localDate(now),
