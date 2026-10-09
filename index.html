@@ -1005,9 +1005,43 @@ function fireAddToCartEvent(p){
   try{ if(typeof ttq !== 'undefined' && ttq.track){ ttq.track('AddToCart', {content_name: p.name, content_id: String(p.id), value, currency: 'BDT'}); } }catch(e){ console.error(e); }
 }
 
+// Customer details → Meta/TikTok "advanced matching" (the pixel hashes them in the browser).
+// This is what lets Ads Manager connect an order back to the person who clicked the ad.
+function pixelUserData(o){
+  const n = normPhone(o && o.phone);
+  const ud = {country:'bd'};
+  if(n && n.length===11) ud.ph = '88'+n;                 // 8801XXXXXXXXX
+  if(n) ud.external_id = n;
+  const nm = String((o&&o.name)||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(nm[0]) ud.fn = nm[0];
+  if(nm.length>1) ud.ln = nm[nm.length-1];
+  return ud;
+}
 function firePurchaseEvent(value, quantity){
-  try{ if(typeof fbq === 'function'){ fbq('track', 'Purchase', {value: value||0, currency: 'BDT', num_items: quantity||1}); } }catch(e){ console.error(e); }
-  try{ if(typeof ttq !== 'undefined' && ttq.track){ ttq.track('CompletePayment', {value: value||0, currency: 'BDT', quantity: quantity||1}); } }catch(e){ console.error(e); }
+  // Accepts the order object (new) or (value, qty) (old calls).
+  const o = (value && typeof value==='object') ? value : {total:value, qty:quantity};
+  const total = Number(o.total)||0, qty = Number(o.qty)||1;
+  const pid = o.productId!=null ? String(o.productId) : '';
+  const evId = o.invoice || ('ORD'+Date.now());
+  try{
+    if(typeof fbq === 'function'){
+      const ud = pixelUserData(o);
+      (window._bbFbIds||[]).forEach(id=>{ try{ fbq('init', id, ud); }catch(e){} });   // attach matching data
+      const params = {value: total, currency: 'BDT', num_items: qty, content_type: 'product', order_id: evId};
+      if(pid){ params.content_ids=[pid]; params.contents=[{id:pid, quantity:qty, item_price:Number(o.price)||0}]; }
+      if(o.product) params.content_name = o.product;
+      fbq('track', 'Purchase', params, {eventID: evId});
+    }
+  }catch(e){ console.error(e); }
+  try{
+    if(typeof ttq !== 'undefined' && ttq.track){
+      const n = normPhone(o.phone);
+      if(n && ttq.identify) ttq.identify({phone_number: '+88'+n, external_id: n});
+      const tp = {value: total, currency: 'BDT', quantity: qty, content_type: 'product'};
+      if(pid){ tp.content_id = pid; tp.contents=[{content_id:pid, content_name:o.product||'', quantity:qty, price:Number(o.price)||0}]; }
+      ttq.track('CompletePayment', tp, {event_id: evId});
+    }
+  }catch(e){ console.error(e); }
 }
 
 function extractFbPixelIds(text){
@@ -1057,12 +1091,34 @@ function loadTikTokEventsBase(){
   }(window,document,'ttq');
 }
 
-function injectTrackingPixels(){
-  if(pixelsInjected) return;
-  if(!settings.fbpixel && !settings.tkpixel && !settings.ga) return;
+// Pixel IDs are cached in the browser so returning visitors (and ad clicks on a slow
+// connection) get the pixel at once instead of waiting for Firebase settings.
+function cachePixelIds(){
+  try{ localStorage.setItem('bb_px', JSON.stringify({fbpixel:settings.fbpixel||'', tkpixel:settings.tkpixel||''})); }catch(e){}
+}
+function bootPixelsFromCache(){
+  try{
+    const c=JSON.parse(localStorage.getItem('bb_px')||'null');
+    if(c && (c.fbpixel||c.tkpixel)) injectTrackingPixels(c);
+  }catch(e){}
+}
+function injectTrackingPixels(src){
+  const cfg = src || settings;
+  if(!src) cachePixelIds();
+  // Already running (e.g. from cache): only add pixel IDs that weren't loaded yet.
+  if(pixelsInjected){
+    const newFb = extractFbPixelIds(cfg.fbpixel).filter(id=>!(window._bbFbIds||[]).includes(id));
+    if(newFb.length){ loadFbEventsBase(); newFb.forEach(id=>{ fbq('init', id); fbq('trackSingle', id, 'PageView'); }); window._bbFbIds=(window._bbFbIds||[]).concat(newFb); }
+    const newTk = extractTikTokPixelIds(cfg.tkpixel).filter(id=>!(window._bbTkIds||[]).includes(id));
+    if(newTk.length){ loadTikTokEventsBase(); newTk.forEach(id=>ttq.load(id)); ttq.page(); window._bbTkIds=(window._bbTkIds||[]).concat(newTk); }
+    if(!src && settings.ga && !window._bbGaDone) injectGa();
+    return;
+  }
+  if(!cfg.fbpixel && !cfg.tkpixel && !cfg.ga) return;
   pixelsInjected = true;
 
-  const fbIds = extractFbPixelIds(settings.fbpixel);
+  const fbIds = extractFbPixelIds(cfg.fbpixel);
+  window._bbFbIds = fbIds.slice();
   if(fbIds.length){
     loadFbEventsBase();
     fbIds.forEach(id=> fbq('init', id));
@@ -1074,13 +1130,19 @@ function injectTrackingPixels(){
     });
   }
 
-  const tkIds = extractTikTokPixelIds(settings.tkpixel);
+  const tkIds = extractTikTokPixelIds(cfg.tkpixel);
+  window._bbTkIds = tkIds.slice();
   if(tkIds.length){
     loadTikTokEventsBase();
     tkIds.forEach(id=> ttq.load(id));
     ttq.page();
   }
 
+  if(!src && settings.ga) injectGa();
+}
+
+function injectGa(){
+  window._bbGaDone = true;
   if(settings.ga){
     const container = document.createElement('div');
     container.innerHTML = settings.ga;
@@ -1095,6 +1157,7 @@ function injectTrackingPixels(){
     });
   }
 }
+bootPixelsFromCache();   // start pixels immediately for returning visitors
 
 // ══════════════════════════════════
 // TOP CATEGORIES — round photo cards. Uses the category's own image (admin → Categories),
@@ -1658,6 +1721,12 @@ function openOrderModal(docId){
     document.getElementById('order-summ').style.display='none';
   }
   cm('pd-overlay');om('order-overlay');
+  if(p) fireInitiateCheckout(p);
+}
+function fireInitiateCheckout(p){
+  const value=(p.sale||p.regular||0)*(curQty||1);
+  try{ if(typeof fbq==='function') fbq('track','InitiateCheckout',{value, currency:'BDT', num_items:curQty||1, content_ids:[String(p.id)], content_type:'product'}); }catch(e){}
+  try{ if(typeof ttq!=='undefined' && ttq.track) ttq.track('InitiateCheckout',{value, currency:'BDT', content_id:String(p.id), content_type:'product'}); }catch(e){}
 }
 function oChQty(d){curQty=Math.max(1,curQty+d);document.getElementById('oqw-num').textContent=curQty;updSumm();}
 
@@ -1803,7 +1872,7 @@ function submitOrderNow(){
     document.getElementById('order-success').style.display='block';
     const sp=document.getElementById('success-phone');if(sp)sp.textContent=phone;
     rememberOrderTs(normPhone(phone));
-    firePurchaseEvent(order.total, order.qty);
+    firePurchaseEvent(order);
     curProd=null;curQty=1;draftOrderId=null;
     if(btn){btn.textContent='✅ অর্ডার কনফার্ম করুন';btn.disabled=false;}
   }
