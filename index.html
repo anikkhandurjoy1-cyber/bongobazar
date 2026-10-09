@@ -760,6 +760,8 @@ let cart=gd('bb_cart',[]);
 let curCat='all', curProd=null, curQty=1, delType='outside', selPayType='cod';
 let draftOrderId = null;
 let draftSaveTimer = null;
+let draftCreating = null;          // Promise while the first draft doc is being created (prevents duplicates)
+let draftIdsThisVisit = [];        // every draft doc this visitor created — all cleaned up after a real order
 let orderSubmitted = false;
 
 updateWaLinks();
@@ -1696,7 +1698,6 @@ function openOrderModal(docId){
     showTab('shop');
     return;
   }
-  draftOrderId = null;
   orderSubmitted = false;
   clearTimeout(draftSaveTimer);
   document.getElementById('order-form-wrap').style.display='block';
@@ -1767,16 +1768,36 @@ function saveDraftOrder(){
     invoice: 'DRAFT-'+String(Date.now()).slice(-6)
   };
   if(draftOrderId){
+    delete draftData.createdAtTs; delete draftData.createdAt; delete draftData.invoice;   // keep first timestamps
     ORDERS_COL.doc(draftOrderId).set(draftData,{merge:true}).catch(err=>console.error('Draft update error:',err));
+  } else if(draftCreating){
+    // first draft still being created → update it once it exists instead of creating another
+    draftCreating.then(()=>{ if(!orderSubmitted && draftOrderId) saveDraftOrder(); });
   } else {
-    ORDERS_COL.add(draftData).then(ref=>{
+    draftCreating = ORDERS_COL.add(draftData).then(ref=>{
+      draftIdsThisVisit.push(ref.id);
       if(orderSubmitted){
         ORDERS_COL.doc(ref.id).delete().catch(()=>{});
       } else {
         draftOrderId = ref.id;
       }
-    }).catch(err=>console.error('Draft create error:',err));
+    }).catch(err=>console.error('Draft create error:',err)).finally(()=>{ draftCreating=null; });
   }
+}
+
+// After a confirmed order: remove every leftover Incomplete draft from this visitor / this phone.
+function cleanupDraftsAfterOrder(phone, keepId){
+  const ids=new Set(draftIdsThisVisit.filter(id=>id!==keepId));
+  draftIdsThisVisit=[];
+  ids.forEach(id=>ORDERS_COL.doc(id).delete().catch(()=>{}));
+  const n=normPhone(phone);
+  if(!n) return;
+  const variants=[...new Set([String(phone).trim(), n, '+88'+n, '88'+n])].filter(Boolean).slice(0,10);
+  ORDERS_COL.where('phone','in',variants).limit(30).get().then(snap=>{
+    snap.docs.forEach(d=>{
+      if(d.id!==keepId && !ids.has(d.id) && d.data().status==='Incomplete') d.ref.delete().catch(()=>{});
+    });
+  }).catch(()=>{});
 }
 
 ['o-name','o-phone','o-address','o-note'].forEach(id=>{
@@ -1883,11 +1904,21 @@ function submitOrderNow(){
     if(btn){btn.textContent='✅ অর্ডার কনফার্ম করুন';btn.disabled=false;}
   }
 
-  if(draftOrderId){
-    ORDERS_COL.doc(draftOrderId).set(order,{merge:true}).then(onSuccess).catch(onFail);
-  } else {
-    ORDERS_COL.add(order).then(onSuccess).catch(onFail);
-  }
+  let savedId=null;
+  const write=()=>{
+    if(draftOrderId){
+      savedId=draftOrderId;
+      return ORDERS_COL.doc(draftOrderId).set(order,{merge:true});
+    }
+    return ORDERS_COL.add(order).then(ref=>{ savedId=ref.id; });
+  };
+  Promise.resolve(draftCreating).catch(()=>{}).then(()=>{
+    // orderSubmitted is already true, so a draft that finished meanwhile was deleted; reuse draftOrderId if set.
+    return write();
+  }).then(()=>{
+    cleanupDraftsAfterOrder(phone, savedId);
+    onSuccess();
+  }).catch(onFail);
 }
 
 // ══════════════════════════════════
