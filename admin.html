@@ -1906,10 +1906,46 @@ function loadIncomplete(){
     });
     renderIncomplete();
     annotateOldCustomers();
+    autoCleanIncompletes();
   }).catch(err=>{
     console.error('Load incomplete error:',err);
     toast('লোড করতে সমস্যা','var(--red)');
   });
+}
+
+// Removes Incomplete drafts that are no longer real leads:
+//  • the same phone later placed a confirmed order, or
+//  • several drafts from one phone (only the newest is kept).
+function incPhone(ph){ const d=String(ph||'').replace(/\D/g,''); return d.length>=11 ? d.slice(-11) : d; }
+function incTs(o){ return o.createdAtTs && o.createdAtTs.toMillis ? o.createdAtTs.toMillis() : (o.createdAt?Date.parse(o.createdAt)||0:0); }
+function autoCleanIncompletes(){
+  const byPhone={};
+  incompleteOrdersCache.forEach(o=>{ const n=incPhone(o.phone); if(n.length===11){ (byPhone[n]=byPhone[n]||[]).push(o); } });
+  const phones=Object.keys(byPhone);
+  if(!phones.length) return;
+  const toDelete=new Set();
+  Promise.all(phones.map(n=>{
+    const drafts=byPhone[n].sort((a,b)=>incTs(b)-incTs(a));
+    const variants=[...new Set([n,'+88'+n,'88'+n].concat(drafts.map(d=>String(d.phone||'').trim())))].filter(Boolean).slice(0,10);
+    return ORDERS_COL.where('phone','in',variants).limit(30).get().then(snap=>{
+      const confirmed=snap.docs.map(d=>d.data()).filter(o=>o.status && o.status!=='Incomplete');
+      const lastConfirmed=confirmed.reduce((m,o)=>Math.max(m,incTs(o)),0);
+      drafts.forEach((d,i)=>{
+        if(lastConfirmed && lastConfirmed >= incTs(d) - 30*60000) toDelete.add(d._docId);   // ordered after (or around) this draft
+        else if(i>0) toDelete.add(d._docId);                                               // older duplicate
+      });
+    }).catch(()=>{});
+  })).then(()=>{
+    if(!toDelete.size) return;
+    const batch=db.batch();
+    toDelete.forEach(id=>batch.delete(ORDERS_COL.doc(id)));
+    return batch.commit().then(()=>{
+      incompleteOrdersCache=incompleteOrdersCache.filter(o=>!toDelete.has(o._docId));
+      renderIncomplete();
+      const b=document.getElementById('inc-badge'); if(b) b.textContent=incompleteOrdersCache.length;
+      toast(toDelete.size+' টি পুরনো/ডুপ্লিকেট incomplete সরানো হয়েছে ✅');
+    });
+  }).catch(err=>console.warn('Incomplete cleanup skipped:',err&&err.message));
 }
 
 function renderIncomplete(search=''){
