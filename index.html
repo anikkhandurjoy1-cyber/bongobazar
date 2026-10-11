@@ -1019,6 +1019,20 @@ function pixelUserData(o){
   if(nm.length>1) ud.ln = nm[nm.length-1];
   return ud;
 }
+function sendFbPixelBeacon(ev, params, evId, ud){
+  (window._bbFbIds||[]).forEach(id=>{
+    const q=new URLSearchParams({id, ev, eid:evId, noscript:'1', dl:location.href, rl:document.referrer||'', ts:String(Date.now())});
+    Object.keys(params||{}).forEach(k=>{
+      const v=params[k]; if(v==null) return;
+      q.append('cd['+k+']', typeof v==='object' ? JSON.stringify(v) : String(v));
+    });
+    const fbp=(document.cookie.match(/(?:^|;\s*)_fbp=([^;]+)/)||[])[1]; if(fbp) q.append('fbp',fbp);
+    const fbc=(document.cookie.match(/(?:^|;\s*)_fbc=([^;]+)/)||[])[1]
+      || ((new URLSearchParams(location.search)).get('fbclid') ? 'fb.1.'+Date.now()+'.'+(new URLSearchParams(location.search)).get('fbclid') : '');
+    if(fbc) q.append('fbc',fbc);
+    const img=new Image(); img.src='https://www.facebook.com/tr?'+q.toString();
+  });
+}
 function firePurchaseEvent(value, quantity){
   // Accepts the order object (new) or (value, qty) (old calls).
   const o = (value && typeof value==='object') ? value : {total:value, qty:quantity};
@@ -1033,6 +1047,9 @@ function firePurchaseEvent(value, quantity){
       if(pid){ params.content_ids=[pid]; params.contents=[{id:pid, quantity:qty, item_price:Number(o.price)||0}]; }
       if(o.product) params.content_name = o.product;
       fbq('track', 'Purchase', params, {eventID: evId});
+      // Backup: if Meta's fbevents.js never loaded (slow net / blocker), the call above just sits
+      // in a queue. Send Purchase straight to Meta's endpoint so the order is still counted.
+      setTimeout(()=>{ if(!(window.fbq && fbq.callMethod)) sendFbPixelBeacon('Purchase', params, evId, ud); }, 2500);
     }
   }catch(e){ console.error(e); }
   try{
